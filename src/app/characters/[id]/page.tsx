@@ -25,9 +25,10 @@ const getStat = (
   c: AnyCharacter,
   key: "likes" | "shares" | "views"
 ): number => {
-  return key in c && typeof (c as any)[key] === "number"
-    ? ((c as any)[key] as number)
-    : 0;
+  if (key in c && typeof c[key] === "number") {
+    return c[key] as number;
+  }
+  return 0;
 };
 
 export default function CharactersPage() {
