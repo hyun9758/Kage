@@ -35,11 +35,18 @@ const getStat = (
 // 서버에서 캐릭터 로드
 async function loadCharactersFromServer(): Promise<StoredCharacter[]> {
   try {
+    console.log("Loading characters from server...");
     const response = await fetch("/api/characters");
+
     if (!response.ok) {
-      throw new Error("Failed to load characters");
+      const errorText = await response.text();
+      console.error("Failed to load characters:", response.status, errorText);
+      throw new Error(`Failed to load characters: ${response.status}`);
     }
-    return await response.json();
+
+    const data = await response.json();
+    console.log("Characters loaded successfully:", data.length, "characters");
+    return data;
   } catch (error) {
     console.error("Error loading characters:", error);
     return [];
@@ -71,10 +78,14 @@ export default function CharactersPage() {
       setUsername(getCurrentUsername());
 
       // 서버에서 캐릭터 로드
+      console.log("Starting to load data...");
       const serverCharacters = await loadCharactersFromServer();
+      console.log("Server characters:", serverCharacters);
 
       // 샘플 캐릭터와 서버 캐릭터 합치기
-      setCharacters([...serverCharacters, ...sampleCharacters]);
+      const allCharacters = [...serverCharacters, ...sampleCharacters];
+      console.log("All characters:", allCharacters.length);
+      setCharacters(allCharacters);
       setLoading(false);
     };
 

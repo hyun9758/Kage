@@ -103,10 +103,10 @@ export async function updateCharacterStats(
   }
 }
 
-// 샘플 캐릭터들 (기존 코드 유지)
+// 샘플 캐릭터들 (ID를 음수로 변경하여 충돌 방지)
 export const sampleCharacters: Character[] = [
   {
-    id: 1,
+    id: -1, // 음수 ID로 변경
     name: "아리아",
     age: "22세",
     personality: "밝고 활발한",
@@ -120,7 +120,7 @@ export const sampleCharacters: Character[] = [
     views: 156,
   },
   {
-    id: 2,
+    id: -2, // 음수 ID로 변경
     name: "카이",
     age: "25세",
     personality: "조용하고 신중한",
@@ -133,7 +133,7 @@ export const sampleCharacters: Character[] = [
     views: 203,
   },
   {
-    id: 3,
+    id: -3, // 음수 ID로 변경
     name: "루나",
     age: "20세",
     personality: "신비롭고 지혜로운",
