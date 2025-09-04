@@ -1,103 +1,131 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import ImageUpload from "@/components/ImageUpload";
+import CharacterForm from "@/components/CharacterForm";
+import CharacterPreview from "@/components/CharacterPreview";
+import { getCurrentUsername } from "@/data/auth";
+import { addUserCharacter } from "@/data/userCharacters";
+
+interface CharacterData {
+  name: string;
+  description: string;
+  age: string;
+  personality: string;
+  background: string;
+  image: string | null;
+  color?: string;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [character, setCharacter] = useState<CharacterData>({
+    name: "",
+    description: "",
+    age: "",
+    personality: "",
+    background: "",
+    image: null,
+    color: "#7c3aed",
+  });
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setCharacter((prev) => ({
+          ...prev,
+          image: e.target?.result as string,
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleInputChange = (field: keyof CharacterData, value: string) => {
+    setCharacter((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleImageRemove = () => {
+    setCharacter((prev) => ({ ...prev, image: null }));
+  };
+
+  const generateShareableImage = () => {
+    alert("공유 가능한 이미지가 생성되었습니다!");
+  };
+
+  const onSaveCharacter = () => {
+    const username = getCurrentUsername();
+    if (!username) {
+      alert("로그인 후 저장할 수 있습니다.");
+      return;
+    }
+    if (!character.name.trim()) {
+      alert("캐릭터 이름을 입력하세요.");
+      return;
+    }
+    addUserCharacter({
+      id: Date.now(),
+      name: character.name.trim(),
+      age: character.age,
+      personality: character.personality,
+      description: character.description,
+      background: character.background,
+      image: character.image,
+      color: character.color,
+      likes: 0,
+      shares: 0,
+      views: 0,
+      owner: username,
+    });
+    alert("캐릭터가 저장되었습니다. 내 관리에서 확인하세요.");
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
+      <Header
+        isPreviewMode={isPreviewMode}
+        onTogglePreview={() => setIsPreviewMode(!isPreviewMode)}
+      />
+
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {!isPreviewMode ? (
+          /* 편집 모드 */
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <ImageUpload
+              image={character.image}
+              onImageUpload={handleImageUpload}
+              onImageRemove={handleImageRemove}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+            <div className="space-y-4">
+              <CharacterForm
+                character={character}
+                onInputChange={handleInputChange}
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={onSaveCharacter}
+                  className="px-5 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700"
+                >
+                  캐릭터 저장
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* 미리보기 모드 */
+          <CharacterPreview
+            character={character}
+            onShare={generateShareableImage}
+          />
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+      <Footer />
     </div>
   );
 }
