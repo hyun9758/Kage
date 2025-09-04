@@ -7,11 +7,12 @@ import CharacterCard from "@/components/CharacterCard";
 import EmptyState from "@/components/EmptyState";
 import { sampleCharacters, type Character } from "@/data/characters";
 import { getCurrentUsername } from "@/data/auth";
-import {
-  loadUserCharacters,
-  removeUserCharacter,
-  type StoredCharacter,
-} from "@/data/userCharacters";
+
+interface StoredCharacter extends Character {
+  owner: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 type AnyCharacter = Character | StoredCharacter;
 
@@ -31,16 +32,53 @@ const getStat = (
   return 0;
 };
 
+// 서버에서 캐릭터 로드
+async function loadCharactersFromServer(): Promise<StoredCharacter[]> {
+  try {
+    const response = await fetch("/api/characters");
+    if (!response.ok) {
+      throw new Error("Failed to load characters");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error loading characters:", error);
+    return [];
+  }
+}
+
+// 서버에서 캐릭터 삭제
+async function removeCharacterFromServer(id: number): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/characters/${id}`, {
+      method: "DELETE",
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Error removing character:", error);
+    return false;
+  }
+}
+
 export default function CharactersPage() {
   const [characters, setCharacters] = useState<AnyCharacter[]>([
     ...sampleCharacters,
   ]);
   const [username, setUsername] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setUsername(getCurrentUsername());
-    const userChars = loadUserCharacters();
-    setCharacters([...userChars, ...sampleCharacters]);
+    const loadData = async () => {
+      setUsername(getCurrentUsername());
+
+      // 서버에서 캐릭터 로드
+      const serverCharacters = await loadCharactersFromServer();
+
+      // 샘플 캐릭터와 서버 캐릭터 합치기
+      setCharacters([...serverCharacters, ...sampleCharacters]);
+      setLoading(false);
+    };
+
+    loadData();
   }, []);
 
   const totalLikes = characters.reduce(
@@ -56,16 +94,28 @@ export default function CharactersPage() {
     0
   );
 
-  const onRemoveOwnCharacter = (id: number) => {
-    const userChars = loadUserCharacters();
+  const onRemoveOwnCharacter = async (id: number) => {
+    const userChars = characters.filter(isOwnedByUser);
     const target = userChars.find((c) => c.id === id);
     if (!target) return;
     if (username !== "admin" && target.owner !== username) return;
 
-    removeUserCharacter(id);
-    const updatedUserChars = loadUserCharacters();
-    setCharacters([...updatedUserChars, ...sampleCharacters]);
+    const success = await removeCharacterFromServer(id);
+    if (success) {
+      // 로컬 상태에서도 제거
+      setCharacters((prev) => prev.filter((c) => c.id !== id));
+    } else {
+      alert("캐릭터 삭제에 실패했습니다.");
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <div className="text-white text-xl">로딩 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
@@ -83,7 +133,6 @@ export default function CharactersPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {characters.map((character) => (
             <div key={character.id} className="relative group">
-              {/* CharacterCard가 Character만 받는다면, 실제 런타임 호환을 전제로 캐스팅 */}
               <CharacterCard character={character as Character} />
 
               {isOwnedByUser(character) &&

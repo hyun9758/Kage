@@ -58,7 +58,7 @@ export default function Home() {
     alert("공유 가능한 이미지가 생성되었습니다!");
   };
 
-  const onSaveCharacter = () => {
+  const onSaveCharacter = async () => {
     const username = getCurrentUsername();
     if (!username) {
       alert("로그인 후 저장할 수 있습니다.");
@@ -68,21 +68,47 @@ export default function Home() {
       alert("캐릭터 이름을 입력하세요.");
       return;
     }
-    addUserCharacter({
-      id: Date.now(),
-      name: character.name.trim(),
-      age: character.age,
-      personality: character.personality,
-      description: character.description,
-      background: character.background,
-      image: character.image,
-      color: character.color,
-      likes: 0,
-      shares: 0,
-      views: 0,
-      owner: username,
-    });
-    alert("캐릭터가 저장되었습니다. 내 관리에서 확인하세요.");
+
+    try {
+      const response = await fetch("/api/characters", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: character.name.trim(),
+          age: character.age,
+          personality: character.personality,
+          description: character.description,
+          background: character.background,
+          image: character.image,
+          color: character.color,
+          likes: 0,
+          shares: 0,
+          views: 0,
+          owner: username,
+        }),
+      });
+
+      if (response.ok) {
+        alert("캐릭터가 저장되었습니다. 모든 사용자가 볼 수 있습니다!");
+        // 폼 초기화
+        setCharacter({
+          name: "",
+          description: "",
+          age: "",
+          personality: "",
+          background: "",
+          image: null,
+          color: "#7c3aed",
+        });
+      } else {
+        alert("캐릭터 저장에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("Error saving character:", error);
+      alert("캐릭터 저장 중 오류가 발생했습니다.");
+    }
   };
 
   return (

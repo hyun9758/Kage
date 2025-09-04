@@ -1,43 +1,75 @@
+import { supabase } from "@/lib/supabase";
+
 export interface RoleplayMessage {
   id: number;
-  characterId: number;
-  content: string;
-  image?: string | null;
-  author?: string | null; // username
-  createdAt: string; // ISO
+  character_id: number;
+  message: string;
+  author: string;
+  created_at: string;
 }
 
-const STORAGE_KEY = "kage.roleplay.messages";
-
-export function loadRoleplayMessages(): RoleplayMessage[] {
-  if (typeof window === "undefined") return [];
+// 서버에서 모든 롤플레이 메시지 로드
+export async function loadRoleplayMessages(): Promise<RoleplayMessage[]> {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as RoleplayMessage[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
+    const { data, error } = await supabase
+      .from("roleplay_messages")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Error loading roleplay messages:", error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error("Error loading roleplay messages:", error);
     return [];
   }
 }
 
-export function saveRoleplayMessages(messages: RoleplayMessage[]) {
-  if (typeof window === "undefined") return;
+// 새 롤플레이 메시지 추가
+export async function addRoleplayMessage(
+  message: Omit<RoleplayMessage, "id" | "created_at">
+): Promise<RoleplayMessage | null> {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-  } catch {}
+    const { data, error } = await supabase
+      .from("roleplay_messages")
+      .insert([message])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error adding roleplay message:", error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error adding roleplay message:", error);
+    return null;
+  }
 }
 
-export function addRoleplayMessage(message: RoleplayMessage) {
-  const current = loadRoleplayMessages();
-  saveRoleplayMessages([message, ...current]);
-}
+// 특정 캐릭터의 롤플레이 메시지 로드
+export async function loadCharacterRoleplayMessages(
+  characterId: number
+): Promise<RoleplayMessage[]> {
+  try {
+    const { data, error } = await supabase
+      .from("roleplay_messages")
+      .select("*")
+      .eq("character_id", characterId)
+      .order("created_at", { ascending: true });
 
-export function clearRoleplayMessages() {
-  saveRoleplayMessages([]);
-}
+    if (error) {
+      console.error("Error loading character roleplay messages:", error);
+      return [];
+    }
 
-export function removeRoleplayMessage(id: number) {
-  const current = loadRoleplayMessages();
-  saveRoleplayMessages(current.filter((m) => m.id !== id));
+    return data || [];
+  } catch (error) {
+    console.error("Error loading character roleplay messages:", error);
+    return [];
+  }
 }

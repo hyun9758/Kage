@@ -5,14 +5,53 @@ import Image from "next/image";
 import Link from "next/link";
 import CharactersHeader from "@/components/CharactersHeader";
 import { sampleCharacters } from "@/data/characters";
-import {
-  RoleplayMessage,
-  loadRoleplayMessages,
-  addRoleplayMessage,
-  clearRoleplayMessages,
-  removeRoleplayMessage,
-} from "@/data/roleplay";
 import { getCurrentUsername } from "@/data/auth";
+
+interface RoleplayMessage {
+  id: number;
+  character_id: number;
+  message: string;
+  author: string;
+  created_at: string;
+}
+
+// 서버에서 롤플레이 메시지 로드
+async function loadRoleplayMessagesFromServer(): Promise<RoleplayMessage[]> {
+  try {
+    const response = await fetch("/api/roleplay");
+    if (!response.ok) {
+      throw new Error("Failed to load roleplay messages");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error loading roleplay messages:", error);
+    return [];
+  }
+}
+
+// 서버에 롤플레이 메시지 추가
+async function addRoleplayMessageToServer(
+  message: Omit<RoleplayMessage, "id" | "created_at">
+): Promise<RoleplayMessage | null> {
+  try {
+    const response = await fetch("/api/roleplay", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(message),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to add roleplay message");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error adding roleplay message:", error);
+    return null;
+  }
+}
 
 export default function RoleplayPage() {
   const [messages, setMessages] = useState<RoleplayMessage[]>([]);
@@ -22,6 +61,7 @@ export default function RoleplayPage() {
   const [content, setContent] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const charactersById = useMemo(() => {
@@ -30,231 +70,229 @@ export default function RoleplayPage() {
     return map;
   }, []);
 
+  const selectedCharacter = charactersById.get(selectedCharacterId);
+
   useEffect(() => {
-    setMessages(loadRoleplayMessages());
-    setUsername(getCurrentUsername());
-    const onStorage = () => setUsername(getCurrentUsername());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const loadData = async () => {
+      setUsername(getCurrentUsername());
+
+      // 서버에서 롤플레이 메시지 로드
+      const serverMessages = await loadRoleplayMessagesFromServer();
+      setMessages(serverMessages);
+      setLoading(false);
+    };
+
+    loadData();
   }, []);
 
-  const canManage = (m: RoleplayMessage) => {
-    if (!username) return false;
-    if (username === "admin") return true;
-    return m.author === username;
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImage(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setImage(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!content.trim() || !username) return;
 
-  const onSend = () => {
-    if (!username) return;
-    if (!content.trim() && !image) return;
-    const msg: RoleplayMessage = {
-      id: Date.now(),
-      characterId: selectedCharacterId,
-      content: content.trim(),
-      image: image || undefined,
+    const newMessage: Omit<RoleplayMessage, "id" | "created_at"> = {
+      character_id: selectedCharacterId,
+      message: content.trim(),
       author: username,
-      createdAt: new Date().toISOString(),
     };
-    addRoleplayMessage(msg);
-    setMessages((prev) => [msg, ...prev]);
-    setContent("");
-    setImage(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    const savedMessage = await addRoleplayMessageToServer(newMessage);
+    if (savedMessage) {
+      setMessages((prev) => [...prev, savedMessage]);
+      setContent("");
+      setImage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } else {
+      alert("메시지 전송에 실패했습니다.");
+    }
   };
 
-  const onDeleteMessage = (id: number) => {
-    const target = messages.find((m) => m.id === id);
-    if (!target || !canManage(target)) return;
-    removeRoleplayMessage(id);
-    setMessages((prev) => prev.filter((m) => m.id !== id));
+  const handleRemoveMessage = async (id: number) => {
+    if (!username) return;
+
+    const message = messages.find((m) => m.id === id);
+    if (!message || (message.author !== username && username !== "admin")) {
+      alert("본인의 메시지만 삭제할 수 있습니다.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/roleplay/${id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== id));
+      } else {
+        alert("메시지 삭제에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("Error removing message:", error);
+      alert("메시지 삭제 중 오류가 발생했습니다.");
+    }
   };
 
-  const clearAll = () => {
-    clearRoleplayMessages();
-    setMessages([]);
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <div className="text-white text-xl">로딩 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
       <CharactersHeader />
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-white">역할 대화 게시판</h1>
-          <div className="flex items-center gap-4">
-            <Link href="/board" className="text-red-400 hover:text-red-300">
-              자유 게시판
-            </Link>
-            <Link href="/" className="text-red-400 hover:text-red-300">
-              홈으로
-            </Link>
+
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* 캐릭터 선택 */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-white mb-4">캐릭터 선택</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {sampleCharacters.map((character) => (
+              <button
+                key={character.id}
+                onClick={() => setSelectedCharacterId(character.id)}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  selectedCharacterId === character.id
+                    ? "border-red-500 bg-red-500/20"
+                    : "border-gray-600 hover:border-red-500/50"
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">👤</div>
+                  <div className="text-white font-medium">{character.name}</div>
+                  <div className="text-gray-400 text-sm">{character.age}</div>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
-        {username ? (
-          <div className="bg-black/70 border border-red-500/20 rounded-2xl p-6 mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <select
-                value={selectedCharacterId}
-                onChange={(e) => setSelectedCharacterId(Number(e.target.value))}
-                className="md:col-span-1 px-4 py-3 rounded-lg bg-black/40 border border-red-500/20 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                {sampleCharacters.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="대사를 입력하세요"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="md:col-span-2 px-4 py-3 rounded-lg bg-black/40 border border-red-500/20 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-              <div className="md:col-span-1 flex items-center gap-2">
+        {/* 선택된 캐릭터 정보 */}
+        {selectedCharacter && (
+          <div className="mb-8 p-6 bg-black/50 rounded-lg border border-red-500/20">
+            <div className="flex items-center space-x-4">
+              <div className="text-4xl">👤</div>
+              <div>
+                <h3 className="text-xl font-bold text-white">
+                  {selectedCharacter.name}
+                </h3>
+                <p className="text-gray-300">{selectedCharacter.description}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 메시지 입력 폼 */}
+        {username && (
+          <form onSubmit={handleSubmit} className="mb-8">
+            <div className="bg-black/50 rounded-lg p-6 border border-red-500/20">
+              <div className="mb-4">
+                <label className="block text-white font-medium mb-2">
+                  메시지
+                </label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="롤플레이 메시지를 입력하세요..."
+                  className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-red-500 focus:outline-none"
+                  rows={3}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-white font-medium mb-2">
+                  이미지 (선택사항)
+                </label>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={onUpload}
-                  className="hidden"
+                  onChange={handleImageUpload}
+                  className="w-full p-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
                 />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-2 rounded-lg bg-black/40 border border-red-500/20 text-white hover:bg-black/60"
-                >
-                  이미지
-                </button>
-                <button
-                  onClick={onSend}
-                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700"
-                >
-                  전송
-                </button>
+                {image && (
+                  <div className="mt-2">
+                    <Image
+                      src={image}
+                      alt="Preview"
+                      width={200}
+                      height={200}
+                      className="rounded-lg"
+                    />
+                  </div>
+                )}
               </div>
+
+              <button
+                type="submit"
+                disabled={!content.trim()}
+                className="w-full py-3 px-6 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+              >
+                메시지 전송
+              </button>
             </div>
-            {image && (
-              <div className="mt-3 text-sm text-gray-300">이미지 첨부됨</div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-black/70 border border-red-500/20 rounded-2xl p-6 mb-8 text-gray-300">
-            대화 참여는 로그인한 사용자만 가능합니다.{" "}
-            <Link
-              href="/auth/login"
-              className="text-red-400 hover:text-red-300"
-            >
-              로그인
-            </Link>{" "}
-            또는{" "}
-            <Link
-              href="/auth/register"
-              className="text-red-400 hover:text-red-300"
-            >
-              회원가입
-            </Link>
-          </div>
+          </form>
         )}
 
+        {/* 메시지 목록 */}
         <div className="space-y-4">
+          <h2 className="text-2xl font-bold text-white">롤플레이 메시지</h2>
           {messages.length === 0 ? (
-            <div className="text-center text-gray-400 py-10 border border-dashed border-red-500/20 rounded-2xl">
-              아직 대화가 없습니다. 첫 대사를 남겨보세요!
+            <div className="text-center py-12 text-gray-400">
+              아직 메시지가 없습니다. 첫 번째 메시지를 작성해보세요!
             </div>
           ) : (
-            messages.map((m) => {
-              const ch = charactersById.get(m.characterId);
-              const isLeft = m.characterId % 2 === 1;
-              const color = ch?.color || "#ef4444";
+            messages.map((message) => {
+              const character = charactersById.get(message.character_id);
               return (
                 <div
-                  key={m.id}
-                  className={`flex ${isLeft ? "justify-start" : "justify-end"}`}
+                  key={message.id}
+                  className="bg-black/50 rounded-lg p-6 border border-red-500/20"
                 >
-                  <div className="flex items-start gap-3 max-w-[80%]">
-                    {!isLeft && (
-                      <div className="text-xs text-gray-400 mt-1">
-                        {m.author || "익명"}
+                  <div className="flex items-start space-x-4">
+                    <div className="text-2xl">👤</div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <span className="font-bold text-white">
+                          {character?.name || "알 수 없는 캐릭터"}
+                        </span>
+                        <span className="text-gray-400">•</span>
+                        <span className="text-gray-400">{message.author}</span>
+                        <span className="text-gray-500 text-sm">
+                          {new Date(message.created_at).toLocaleString()}
+                        </span>
                       </div>
-                    )}
-                    <div className="w-10 h-10 rounded-full bg-black/40 border border-red-500/20 flex items-center justify-center text-white overflow-hidden">
-                      {ch?.image ? (
-                        <Image
-                          src={ch.image}
-                          alt={ch.name}
-                          width={40}
-                          height={40}
-                          className="object-cover w-10 h-10"
-                        />
-                      ) : (
-                        <span>👤</span>
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="text-sm text-gray-300">{ch?.name}</div>
-                        <div className="text-[10px] text-gray-500">
-                          {new Date(m.createdAt).toLocaleString("ko-KR")}
-                        </div>
-                        {canManage(m) && (
+                      <p className="text-gray-300 mb-2">{message.message}</p>
+                      {username &&
+                        (message.author === username ||
+                          username === "admin") && (
                           <button
-                            onClick={() => onDeleteMessage(m.id)}
-                            className="text-[10px] text-red-300 hover:text-red-200"
+                            onClick={() => handleRemoveMessage(message.id)}
+                            className="text-red-400 hover:text-red-300 text-sm"
                           >
                             삭제
                           </button>
                         )}
-                      </div>
-                      <div
-                        className="rounded-2xl p-3 text-white"
-                        style={{ background: color }}
-                      >
-                        {m.content}
-                        {m.image && (
-                          <div className="mt-2 relative w-56 h-56 rounded-lg overflow-hidden">
-                            <Image
-                              src={m.image}
-                              alt="첨부 이미지"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        )}
-                      </div>
                     </div>
-                    {isLeft && (
-                      <div className="text-xs text-gray-400 mt-1">
-                        {m.author || "익명"}
-                      </div>
-                    )}
                   </div>
                 </div>
               );
             })
           )}
-        </div>
-
-        <div className="mt-8 flex items-center gap-4 justify-end">
-          <button
-            onClick={clearAll}
-            className="px-4 py-2 rounded-lg bg-black/40 border border-red-500/20 text-white hover:bg-black/60"
-          >
-            전체 삭제
-          </button>
-          <Link
-            href="/board"
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700"
-          >
-            자유 게시판으로
-          </Link>
         </div>
       </main>
     </div>

@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export interface Character {
   id: number;
   name: string;
@@ -6,12 +8,102 @@ export interface Character {
   description: string;
   background: string;
   image: string | null;
-  color?: string; // hex or tailwind-compatible color
+  color?: string;
   likes: number;
   shares: number;
   views: number;
 }
 
+export interface StoredCharacter extends Character {
+  owner: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// 서버에서 모든 캐릭터 로드
+export async function loadAllCharacters(): Promise<StoredCharacter[]> {
+  try {
+    const { data, error } = await supabase
+      .from("characters")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error loading characters:", error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error("Error loading characters:", error);
+    return [];
+  }
+}
+
+// 새 캐릭터 추가
+export async function addCharacter(
+  character: Omit<StoredCharacter, "id" | "created_at" | "updated_at">
+): Promise<StoredCharacter | null> {
+  try {
+    const { data, error } = await supabase
+      .from("characters")
+      .insert([character])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error adding character:", error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error adding character:", error);
+    return null;
+  }
+}
+
+// 캐릭터 삭제
+export async function removeCharacter(id: number): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("characters").delete().eq("id", id);
+
+    if (error) {
+      console.error("Error removing character:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error removing character:", error);
+    return false;
+  }
+}
+
+// 캐릭터 통계 업데이트 (좋아요, 공유, 조회)
+export async function updateCharacterStats(
+  id: number,
+  stats: { likes?: number; shares?: number; views?: number }
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("characters")
+      .update(stats)
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error updating character stats:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error updating character stats:", error);
+    return false;
+  }
+}
+
+// 샘플 캐릭터들 (기존 코드 유지)
 export const sampleCharacters: Character[] = [
   {
     id: 1,
@@ -22,7 +114,7 @@ export const sampleCharacters: Character[] = [
     background:
       "마법의 숲에서 자란 엘프 소녀로, 자연과 친화적인 힘을 가지고 있습니다.",
     image: null,
-    color: "#ef4444", // red-500
+    color: "#ef4444",
     likes: 42,
     shares: 8,
     views: 156,
@@ -35,7 +127,7 @@ export const sampleCharacters: Character[] = [
     description: "검술에 뛰어난 기사",
     background: "왕실 근위대 출신으로, 정의를 위해 싸우는 기사입니다.",
     image: null,
-    color: "#22c55e", // green-500
+    color: "#22c55e",
     likes: 38,
     shares: 12,
     views: 203,
@@ -49,7 +141,7 @@ export const sampleCharacters: Character[] = [
     background:
       "고대 마법사의 후손으로, 달의 힘을 다룰 수 있는 특별한 능력을 가지고 있습니다.",
     image: null,
-    color: "#3b82f6", // blue-500
+    color: "#3b82f6",
     likes: 67,
     shares: 15,
     views: 289,
