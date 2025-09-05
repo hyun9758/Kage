@@ -17,14 +17,28 @@ export default function BoardPage() {
   const [content, setContent] = useState("");
   const [relation, setRelation] = useState("");
   const [username, setUsername] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setPosts(loadPosts());
+    loadPostsData();
     setUsername(getCurrentUsername());
     const onStorage = () => setUsername(getCurrentUsername());
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  const loadPostsData = async () => {
+    setLoading(true);
+    try {
+      const postsData = await loadPosts();
+      setPosts(postsData);
+    } catch (error) {
+      console.error("게시글 로드 실패:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const canManage = (post: BoardPost) => {
     if (!username) return false;
@@ -32,29 +46,52 @@ export default function BoardPage() {
     return post.author === username;
   };
 
-  const addPost = () => {
+  const addPost = async () => {
     if (!username) return;
     if (!title.trim() || !content.trim()) return;
-    const newPost: BoardPost = {
-      id: Date.now(),
-      title: title.trim(),
-      content: content.trim(),
-      relation: relation.trim() || undefined,
-      createdAt: new Date().toISOString(),
-      author: username,
-    };
-    addPostToStorage(newPost);
-    setPosts((prev) => [newPost, ...prev]);
-    setTitle("");
-    setContent("");
-    setRelation("");
+
+    setIsSubmitting(true);
+    try {
+      const newPost = {
+        title: title.trim(),
+        content: content.trim(),
+        relation: relation.trim() || undefined,
+        createdAt: new Date().toISOString(),
+        author: username,
+      };
+
+      const savedPost = await addPostToStorage(newPost);
+      if (savedPost) {
+        setPosts((prev) => [savedPost, ...prev]);
+        setTitle("");
+        setContent("");
+        setRelation("");
+      } else {
+        alert("게시글 저장에 실패했습니다. 다시 시도해주세요.");
+      }
+    } catch (error) {
+      console.error("게시글 작성 실패:", error);
+      alert("게시글 작성 중 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const removePost = (id: number) => {
+  const removePost = async (id: number) => {
     const target = posts.find((p) => p.id === id);
     if (!target || !canManage(target)) return;
-    removePostFromStorage(id);
-    setPosts((prev) => prev.filter((p) => p.id !== id));
+
+    try {
+      const success = await removePostFromStorage(id);
+      if (success) {
+        setPosts((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        alert("게시글 삭제에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("게시글 삭제 실패:", error);
+      alert("게시글 삭제 중 오류가 발생했습니다.");
+    }
   };
 
   return (
@@ -88,6 +125,7 @@ export default function BoardPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg bg-black/40 border border-red-500/20 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                disabled={isSubmitting}
               />
               <input
                 type="text"
@@ -95,6 +133,7 @@ export default function BoardPage() {
                 value={relation}
                 onChange={(e) => setRelation(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg bg-black/40 border border-red-500/20 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                disabled={isSubmitting}
               />
               <textarea
                 placeholder="내용을 작성하세요"
@@ -102,13 +141,15 @@ export default function BoardPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg bg-black/40 border border-red-500/20 text-white focus:outline-none focus:ring-2 focus:ring-red-500 resize-y"
+                disabled={isSubmitting}
               />
               <div className="flex justify-end">
                 <button
                   onClick={addPost}
-                  className="px-5 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-colors"
+                  disabled={isSubmitting || !title.trim() || !content.trim()}
+                  className="px-5 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  작성하기
+                  {isSubmitting ? "작성 중..." : "작성하기"}
                 </button>
               </div>
             </div>
@@ -132,52 +173,58 @@ export default function BoardPage() {
           </div>
         )}
 
-        <div className="space-y-4">
-          {posts.length === 0 ? (
-            <div className="text-center text-gray-400 py-10 border border-dashed border-red-500/20 rounded-2xl">
-              아직 게시글이 없습니다. 첫 글을 작성해보세요!
-            </div>
-          ) : (
-            posts.map((post) => (
-              <article
-                key={post.id}
-                className="bg-black/70 border border-red-500/20 rounded-2xl p-6"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <h2 className="text-xl font-semibold text-white">
-                      {post.title}
-                    </h2>
-                    <div className="text-xs text-gray-400">
-                      작성자: {post.author || "익명"}
+        {loading ? (
+          <div className="text-center text-gray-400 py-10">
+            게시글을 불러오는 중...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {posts.length === 0 ? (
+              <div className="text-center text-gray-400 py-10 border border-dashed border-red-500/20 rounded-2xl">
+                아직 게시글이 없습니다. 첫 글을 작성해보세요!
+              </div>
+            ) : (
+              posts.map((post) => (
+                <article
+                  key={post.id}
+                  className="bg-black/70 border border-red-500/20 rounded-2xl p-6"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h2 className="text-xl font-semibold text-white">
+                        {post.title}
+                      </h2>
+                      <div className="text-xs text-gray-400">
+                        작성자: {post.author || "익명"}
+                      </div>
                     </div>
+                    {canManage(post) && (
+                      <button
+                        onClick={() => removePost(post.id)}
+                        className="text-sm text-red-300 hover:text-red-200"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
-                  {canManage(post) && (
-                    <button
-                      onClick={() => removePost(post.id)}
-                      className="text-sm text-red-300 hover:text-red-200"
-                    >
-                      삭제
-                    </button>
+                  {post.relation && (
+                    <div className="mb-2">
+                      <span className="px-2 py-1 text-xs rounded-full border border-red-500/30 text-red-300">
+                        {post.relation}
+                      </span>
+                    </div>
                   )}
-                </div>
-                {post.relation && (
-                  <div className="mb-2">
-                    <span className="px-2 py-1 text-xs rounded-full border border-red-500/30 text-red-300">
-                      {post.relation}
-                    </span>
+                  <p className="text-gray-300 whitespace-pre-wrap">
+                    {post.content}
+                  </p>
+                  <div className="mt-3 text-xs text-gray-500">
+                    {new Date(post.createdAt).toLocaleString("ko-KR")}
                   </div>
-                )}
-                <p className="text-gray-300 whitespace-pre-wrap">
-                  {post.content}
-                </p>
-                <div className="mt-3 text-xs text-gray-500">
-                  {new Date(post.createdAt).toLocaleString("ko-KR")}
-                </div>
-              </article>
-            ))
-          )}
-        </div>
+                </article>
+              ))
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

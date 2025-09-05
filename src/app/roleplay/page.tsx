@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import CharactersHeader from "@/components/CharactersHeader";
-import { sampleCharacters } from "@/data/characters";
+import { loadAllCharacters, StoredCharacter } from "@/data/characters";
 import { getCurrentUsername } from "@/data/auth";
 
 interface RoleplayMessage {
@@ -55,8 +55,9 @@ async function addRoleplayMessageToServer(
 
 export default function RoleplayPage() {
   const [messages, setMessages] = useState<RoleplayMessage[]>([]);
-  const [selectedCharacterId, setSelectedCharacterId] = useState<number>(
-    sampleCharacters[0]?.id || 1
+  const [characters, setCharacters] = useState<StoredCharacter[]>([]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(
+    null
   );
   const [content, setContent] = useState("");
   const [image, setImage] = useState<string | null>(null);
@@ -65,20 +66,33 @@ export default function RoleplayPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const charactersById = useMemo(() => {
-    const map = new Map<number, (typeof sampleCharacters)[number]>();
-    for (const c of sampleCharacters) map.set(c.id, c);
+    const map = new Map<number, StoredCharacter>();
+    for (const c of characters) map.set(c.id, c);
     return map;
-  }, []);
+  }, [characters]);
 
-  const selectedCharacter = charactersById.get(selectedCharacterId);
+  const selectedCharacter = selectedCharacterId
+    ? charactersById.get(selectedCharacterId)
+    : null;
 
   useEffect(() => {
     const loadData = async () => {
       setUsername(getCurrentUsername());
 
-      // 서버에서 롤플레이 메시지 로드
-      const serverMessages = await loadRoleplayMessagesFromServer();
+      // 캐릭터 목록과 롤플레이 메시지를 병렬로 로드
+      const [charactersData, serverMessages] = await Promise.all([
+        loadAllCharacters(),
+        loadRoleplayMessagesFromServer(),
+      ]);
+
+      setCharacters(charactersData);
       setMessages(serverMessages);
+
+      // 첫 번째 캐릭터를 기본 선택
+      if (charactersData.length > 0 && !selectedCharacterId) {
+        setSelectedCharacterId(charactersData[0].id);
+      }
+
       setLoading(false);
     };
 
@@ -98,7 +112,7 @@ export default function RoleplayPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !username) return;
+    if (!content.trim() || !username || !selectedCharacterId) return;
 
     const newMessage: Omit<RoleplayMessage, "id" | "created_at"> = {
       character_id: selectedCharacterId,
@@ -160,44 +174,85 @@ export default function RoleplayPage() {
         {/* 캐릭터 선택 */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white mb-4">캐릭터 선택</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {sampleCharacters.map((character) => (
-              <button
-                key={character.id}
-                onClick={() => setSelectedCharacterId(character.id)}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  selectedCharacterId === character.id
-                    ? "border-red-500 bg-red-500/20"
-                    : "border-gray-600 hover:border-red-500/50"
-                }`}
+          {characters.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 border border-dashed border-red-500/20 rounded-lg">
+              <p>등록된 캐릭터가 없습니다.</p>
+              <Link
+                href="/characters"
+                className="text-red-400 hover:text-red-300 mt-2 inline-block"
               >
-                <div className="text-center">
-                  <div className="text-2xl mb-2">👤</div>
-                  <div className="text-white font-medium">{character.name}</div>
-                  <div className="text-gray-400 text-sm">{character.age}</div>
-                </div>
-              </button>
-            ))}
-          </div>
+                캐릭터 만들러 가기
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {characters.map((character) => (
+                <button
+                  key={character.id}
+                  onClick={() => setSelectedCharacterId(character.id)}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    selectedCharacterId === character.id
+                      ? "border-red-500 bg-red-500/20"
+                      : "border-gray-600 hover:border-red-500/50"
+                  }`}
+                >
+                  <div className="text-center">
+                    {character.image ? (
+                      <div className="w-12 h-12 mx-auto mb-2 rounded-full overflow-hidden">
+                        <Image
+                          src={character.image}
+                          alt={character.name}
+                          width={48}
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-2xl mb-2">👤</div>
+                    )}
+                    <div className="text-white font-medium">
+                      {character.name}
+                    </div>
+                    <div className="text-gray-400 text-sm">{character.age}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 선택된 캐릭터 정보 */}
         {selectedCharacter && (
           <div className="mb-8 p-6 bg-black/50 rounded-lg border border-red-500/20">
             <div className="flex items-center space-x-4">
-              <div className="text-4xl">👤</div>
+              {selectedCharacter.image ? (
+                <div className="w-16 h-16 rounded-full overflow-hidden">
+                  <Image
+                    src={selectedCharacter.image}
+                    alt={selectedCharacter.name}
+                    width={64}
+                    height={64}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="text-4xl">👤</div>
+              )}
               <div>
                 <h3 className="text-xl font-bold text-white">
                   {selectedCharacter.name}
                 </h3>
                 <p className="text-gray-300">{selectedCharacter.description}</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  성격: {selectedCharacter.personality}
+                </p>
               </div>
             </div>
           </div>
         )}
 
         {/* 메시지 입력 폼 */}
-        {username && (
+        {username && selectedCharacterId && (
           <form onSubmit={handleSubmit} className="mb-8">
             <div className="bg-black/50 rounded-lg p-6 border border-red-500/20">
               <div className="mb-4">
@@ -248,6 +303,12 @@ export default function RoleplayPage() {
           </form>
         )}
 
+        {!selectedCharacterId && characters.length > 0 && (
+          <div className="mb-8 p-6 bg-black/50 rounded-lg border border-red-500/20 text-center text-gray-400">
+            캐릭터를 선택해주세요.
+          </div>
+        )}
+
         {/* 메시지 목록 */}
         <div className="space-y-4">
           <h2 className="text-2xl font-bold text-white">롤플레이 메시지</h2>
@@ -264,7 +325,19 @@ export default function RoleplayPage() {
                   className="bg-black/50 rounded-lg p-6 border border-red-500/20"
                 >
                   <div className="flex items-start space-x-4">
-                    <div className="text-2xl">👤</div>
+                    {character?.image ? (
+                      <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+                        <Image
+                          src={character.image}
+                          alt={character.name}
+                          width={48}
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-2xl">👤</div>
+                    )}
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
                         <span className="font-bold text-white">
