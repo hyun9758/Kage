@@ -13,8 +13,10 @@ import {
   Loader2,
   Edit,
   MoreVertical,
+  MessageCircle,
 } from "lucide-react";
 import CharacterForm from "./CharacterForm";
+import CharacterChatModal from "./CharacterChatModal";
 
 interface Character {
   id: number;
@@ -49,6 +51,7 @@ export default function CharacterCard({
   const [showDetails, setShowDetails] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [editCharacter, setEditCharacter] = useState<Character>(character);
@@ -248,15 +251,25 @@ export default function CharacterCard({
             )}
           </div>
 
-          {/* 자세히 보기 버튼 */}
-          <div className="pt-4">
+          {/* 자세히 보기 / 채팅하기 버튼 */}
+          <div className="pt-4 flex gap-3">
             <button
               onClick={() => setShowDetails(true)}
               disabled={isDeleting}
-              className="w-full text-white py-3 px-4 rounded-lg transition-all duration-200 text-center block shadow-lg hover:scale-105 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="flex-1 text-white py-3 px-4 rounded-lg transition-all duration-200 text-center shadow-lg hover:scale-105 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               style={{ background: theme }}
             >
               자세히 보기
+            </button>
+            <button
+              onClick={() => setShowChatModal(true)}
+              disabled={isDeleting}
+              className="flex items-center justify-center gap-2 text-white py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:scale-105 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              style={{ background: theme }}
+              title="캐릭터와 AI 채팅"
+            >
+              <MessageCircle className="w-4 h-4" />
+              채팅
             </button>
           </div>
         </div>
@@ -422,6 +435,21 @@ export default function CharacterCard({
                 </div>
               </div>
 
+              {/* 채팅하기 버튼 (상세 모달 내) */}
+              <div className="pt-4">
+                <button
+                  onClick={() => {
+                    setShowDetails(false);
+                    setShowChatModal(true);
+                  }}
+                  className="w-full text-white py-3 px-4 rounded-lg transition-all duration-200 text-center shadow-lg hover:opacity-90 text-sm sm:text-base font-medium flex items-center justify-center gap-2"
+                  style={{ background: theme }}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {character.name}와 채팅하기
+                </button>
+              </div>
+
               {/* 통계 섹션 */}
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">
@@ -460,6 +488,14 @@ export default function CharacterCard({
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI 채팅 모달 */}
+      {showChatModal && (
+        <CharacterChatModal
+          character={character}
+          onClose={() => setShowChatModal(false)}
+        />
       )}
 
       {/* 메뉴 외부 클릭 시 닫기 */}
