@@ -14,20 +14,15 @@ interface ChatMessage {
 }
 
 function buildSystemPrompt(character: CharacterForChat): string {
-  return `당신은 캐릭터 "${character.name}"입니다. 다음 설정을 절대적으로 따르며, 항상 이 캐릭터로만 대답하세요.
+  return `당신은 "${character.name}"(나이: ${character.age}, 성격: ${character.personality}). 소개: ${character.description}. 배경: ${character.background}
+규칙: 한국어만, ${character.name} 1인칭, 성격에 맞는 말투. 답변은 반드시 2~3문장으로 짧게.`;
+}
 
-- 이름: ${character.name}
-- 나이: ${character.age}
-- 성격: ${character.personality}
-- 소개: ${character.description}
-- 배경/스토리: ${character.background}
+const MAX_HISTORY_MESSAGES = 6;
 
-규칙:
-1. 반드시 한국어로만 답하세요.
-2. ${character.name}로서 말하고, 자신을 "저" 또는 캐릭터에 맞는 1인칭으로 표현하세요.
-3. 성격과 배경에 맞는 말투와 반응을 유지하세요.
-4. 메타 설명이나 "캐릭터로서" 같은 발언은 하지 마세요.
-5. 짧고 자연스러운 대화체로 답하세요.`;
+function trimMessages(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length <= MAX_HISTORY_MESSAGES) return messages;
+  return messages.slice(-MAX_HISTORY_MESSAGES);
 }
 
 function getGeminiModelsToTry(): string[] {
@@ -71,7 +66,8 @@ export async function POST(request: NextRequest) {
   }
 
   const systemPrompt = buildSystemPrompt(character);
-  const contents = messages
+  const trimmed = trimMessages(messages);
+  const contents = trimmed
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m) => ({
       role: m.role === "user" ? "user" : "model",
@@ -100,7 +96,7 @@ export async function POST(request: NextRequest) {
               contents,
               generationConfig: {
                 maxOutputTokens: 512,
-                temperature: 0.8,
+                temperature: 0.7,
               },
             });
 
@@ -127,7 +123,7 @@ export async function POST(request: NextRequest) {
                 res.status === 503 ||
                 /high demand|try again later|experiencing high demand/i.test(lastError);
               if ((isQuotaOrLimit || isHighDemand) && attempt === 0) {
-                await sleep(2800);
+                await sleep(1500);
                 continue;
               }
               break;
@@ -196,7 +192,7 @@ export async function POST(request: NextRequest) {
         } else {
           const openAiMessages: { role: "user" | "assistant" | "system"; content: string }[] = [
             { role: "system", content: systemPrompt },
-            ...messages
+            ...trimmed
               .filter((m) => m.role === "user" || m.role === "assistant")
               .map((m) => ({ role: m.role, content: m.content })),
           ];
@@ -211,7 +207,7 @@ export async function POST(request: NextRequest) {
               model: process.env.OPENAI_CHAT_MODEL || "gpt-3.5-turbo",
               messages: openAiMessages,
               max_tokens: 512,
-              temperature: 0.8,
+              temperature: 0.7,
               stream: true,
             }),
           });
