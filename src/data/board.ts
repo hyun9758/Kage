@@ -93,7 +93,7 @@ export async function removePostFromStorage(id: number): Promise<boolean> {
 }
 
 // 기존 함수들 (호환성을 위해 유지하되 async로 변경)
-export async function savePosts(posts: BoardPost[]) {
+export async function savePosts(_posts: BoardPost[]) {
   // 이 함수는 더 이상 사용되지 않지만 호환성을 위해 유지
   console.warn(
     "savePosts 함수는 더 이상 사용되지 않습니다. Supabase를 직접 사용하세요."

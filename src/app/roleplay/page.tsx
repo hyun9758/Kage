@@ -97,6 +97,7 @@ export default function RoleplayPage() {
     };
 
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 시 한 번만 로드
   }, []);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {

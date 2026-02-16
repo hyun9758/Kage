@@ -1,19 +1,27 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("❌ Supabase environment variables are missing!");
-  console.error("Please check your .env.local file:");
-  console.error("- NEXT_PUBLIC_SUPABASE_URL");
-  console.error("- NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  throw new Error("Supabase configuration is incomplete");
+let _supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (_supabase) return _supabase;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("❌ Supabase environment variables are missing!");
+    console.error("Set in Vercel: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    throw new Error("Supabase configuration is incomplete");
+  }
+  _supabase = createClient(supabaseUrl, supabaseAnonKey);
+  return _supabase;
 }
 
-console.log("✅ Supabase client initialized with URL:", supabaseUrl);
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// 빌드 시점에는 throw 하지 않음 → Vercel 빌드 성공. 런타임에 사용 시점에 검사.
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    return (getSupabase() as unknown as Record<string, unknown>)[prop as string];
+  },
+});
 
 // 데이터베이스 타입 정의
 export interface Database {

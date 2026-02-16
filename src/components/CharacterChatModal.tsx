@@ -91,7 +91,7 @@ export default function CharacterChatModal({
         content: m.content,
       }));
 
-      let res = await fetch("/api/chat/stream", {
+      const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -115,7 +115,7 @@ export default function CharacterChatModal({
         return;
       }
 
-      let reader = res.body?.getReader();
+      const reader = res.body?.getReader();
       if (!reader) {
         setError("스트림을 읽을 수 없습니다.");
         setStreamingContent(null);
